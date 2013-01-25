@@ -1,5 +1,7 @@
 #include "LPD8806.h"
 #include "SPI.h"
+#include <avr/interrupt.h> 
+#include <avr/io.h> 
 
 // Constants
 const int NUMLIGHTS = 6;    // Number of lights per arm
@@ -52,6 +54,8 @@ int curLight = 0;
 //int curArm = 0;
 int curPwr = 0;
 
+bool loopCounter = false;
+
 void setup() {
     // Setup all lights and arms
     pinMode(testPin,OUTPUT);
@@ -69,12 +73,72 @@ void setup() {
         }
     }
     
+    
+    
+    
+    
+    
+    cli();    //DISABLE ALL INTERRUPTIONS
+    
+    //REGISTRE UBRR0
+    //9600 BAUD FOSC=16MHZ
+    UBRR0=103;
+    
+    //REGISTRE USCR0C
+    //COM ASYNCHRONE
+    bitWrite(UCSR0C,UMSEL00,0);
+    bitWrite(UCSR0C,UMSEL01,0);
+    
+    //PARITY NONE
+    bitWrite(UCSR0C,UPM01,0);
+    bitWrite(UCSR0C,UPM00,0);
+    
+    //8 DATA BIT
+    bitWrite(UCSR0C,UCSZ02,0);
+    bitWrite(UCSR0C,UCSZ01,1);
+    bitWrite(UCSR0C,UCSZ00,1);
+    
+    //REGISTRE UCSR0B  
+    //RECEIVE & TRANSMITT ENABLE
+    bitWrite(UCSR0B,RXEN0,1);
+    bitWrite(UCSR0B,TXEN0,1);
+    
+    //ENABLE RX COMPLETE INTERRUPT
+    bitWrite(UCSR0B, RXCIE0,1);
+    
+    sei();    //ENABLE INTERRUPTION
+    
+    
     // Start serial communication    
     Serial.begin(9600); connected = false;
     digitalWrite(testPin, HIGH); 
+
     delay(500);
 }
 
+
+void loop() {
+    // Just turns a light on and off to viz main loop speed
+    if(loopCounter) { digitalWrite(testPin, LOW); }
+    else { digitalWrite(testPin, HIGH); }
+    loopCounter = !loopCounter;
+    
+    if(connected) { // This is with a connection
+        for(int i=0;i<NUMLIGHTS;i++) {
+            if(Lights[i].pwr > 0) {
+//                parseSerial();
+                render(i);
+                }
+            }
+        } else { // This is with no connection
+            for(int i=0;i<NUMLIGHTS;i++) {
+                for( int a=0;a<NUMARMS;a++) {
+                   testStrip(&Lights[i].strip[a]);
+                }
+            }        
+    }
+}
+              
 void testStrip(LPD8806 * strip) {
     int i;
     for(i=0; i<strip->numPixels(); i++) { 
@@ -121,26 +185,7 @@ void clearStrip(LPD8806 * strip) {
         strip->show();
         delay(10);
     }
-}
-               
-void loop() {
-   digitalWrite(testPin, HIGH);  
-    if(connected) { // This is with a connection
-        for(int i=0;i<NUMLIGHTS;i++) {
-            if(Lights[i].pwr > 0() {
-                parseSerial();
-                render(i);
-            }
-        }
-   } else { // This is with no connection
-     for(int i=0;i<NUMLIGHTS;i++) {
-         for( int a=0;a<NUMARMS;a++) {
-            testStrip(&Lights[i].strip[a]);
-         }
-     }        
-   digitalWrite(testPin, LOW); 
-   }
-}                  
+}              
                                          
 void render(uint32_t lightId) {
     int maxPower, minPower, ptr, ledStr, pwr;
@@ -174,24 +219,22 @@ void parseSerial() {
     // Collecting the datas.
     if (isDigit(buffer)) {
         //inString += (char)inChar; 
-        Lights[curLight].pwr = buffer.toInt();
+        Lights[curLight].pwr = buffer;
     }
     
     // Iterating through the lights
     if (buffer == ',') {
-        Lights[curLight].pwr = buffer.toInt();
+        Lights[curLight].pwr = buffer;
         curLight++;
     }
     
     // Last light
     if (buffer == '\n') {
-        Lights[NUMLIGHTS-1].pwr = buffer.toInt();
+        Lights[NUMLIGHTS-1].pwr = buffer;
         curLight = 0;
     }   
-   }
 }
 
-void serialEvent() {
-    connected = true;
-   // parseSerial();
+ISR(USART0_RX_vect) {  
+    parseSerial();
 }
