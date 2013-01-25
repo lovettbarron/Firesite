@@ -1,0 +1,36 @@
+//THE PATH TO THE ROOT OF OUR OF PATH RELATIVE TO THIS PROJECT.
+//THIS NEEDS TO BE DEFINED BEFORE CoreOF.xcconfig IS INCLUDED
+//OF_PATH = ../../openFrameworks
+
+//THIS HAS ALL THE HEADER AND LIBS FOR OF CORE
+//#include "../../openFrameworks/libs/openFrameworksCompiled/project/osx/CoreOF.xcconfig" "../../openFrameworks/addons/ofxFftw/src/" "../../openFrameworks/addons/ofxFftw/libs/kiss"
+
+//OTHER_LDFLAGS = $(OF_CORE_LIBS) 
+//HEADER_SEARCH_PATHS = $(OF_CORE_HEADERS)
+
+//THE PATH TO THE ROOT OF OUR OF PATH RELATIVE TO THIS PROJECT.
+//THIS NEEDS TO BE DEFINED BEFORE CoreOF.xcconfig IS INCLUDED
+OF_PATH = ../../openFrameworks
+
+//THIS HAS ALL THE HEADER AND LIBS FOR OF CORE
+#include "../../openFrameworks/libs/openFrameworksCompiled/project/osx/CoreOF.xcconfig"
+
+ADDONS_PATH = "$(OF_PATH)/addons"
+// For my own file structure. Src is above of, addons is within
+SRC_PATH = $(OF_PATH)/..
+OFX_CV_HEADERS = "$(ADDONS_PATH)/ofxOpenCv/libs/opencv/include/" "$(ADDONS_PATH)/ofxCv/libs/ofxCv/include/" "$(ADDONS-PATH)/ofxDirList" 
+
+// ofxCV
+OFXCV_HEADERS = "$(ADDONS_PATH)/ofxOpenCv/libs/opencv/include/" "$(ADDONS_PATH)/ofxCv/libs/ofxCv/include/"
+OFXCV_LIBS = "$(ADDONS_PATH)/ofxOpenCv/libs/opencv/lib/osx/opencv.a"
+
+// ofxKinect
+OFX_KINECT_HEADERS = "$(ADDONS_PATH)/ofxKinect/libs/libusb/osx/include/"
+OFX_KINECT_LIBS = "$(ADDONS_PATH)/ofxKinect/libs/libusb/osx/libs/usb-1.0.a"
+
+// all addons
+OF_ADDON_HEADERS = $(OFX_KINECT_HEADERS) $(OFX_CV_HEADERS)
+OF_ADDON_LIBS = $(OFX_KINECT_LIBS) $(OFXCV_LIBS)
+
+OTHER_LDFLAGS = $(OF_CORE_LIBS) $(OF_ADDON_LIBS)
+HEADER_SEARCH_PATHS = $(OF_CORE_HEADERS) $(OF_ADDON_HEADERS)

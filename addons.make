@@ -1,0 +1,7 @@
+ofxAudioUnit
+ofxBox2d
+ofxControlPanel
+ofxCv
+ofxKinect
+ofxOpenCv
+ofxXmlSettings
