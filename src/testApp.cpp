@@ -29,7 +29,7 @@ void testApp::setup(){
     
     camera.disableMouseInput();
     
-    numberOfLights = 6;
+    numberOfLights = 5;
     room = ofVec3f(1000,400,500);
     
     for(int i=0;i<numberOfLights;i++) {
@@ -57,7 +57,7 @@ void testApp::setupArduino() {
  
     serial.listDevices();
     //	vector <ofSerialDeviceInfo> deviceList = serial.getDeviceList();
-	serial.setup(5,9600); 
+	serial.setup(9,9600); 
     //    int numSent = serial.writeBytes("Setup Firesite");
     //ofLog() << "Sent " << ofToString(numSent) << " bytes.";
     
@@ -69,18 +69,24 @@ void testApp::writeArduino() {
         buffer = "";
         for(int l = 0; l<lights.size();l++) {
             lights[l]->update();
-    //        serial.writeBytes(lights[l]->getBuffer(),lights[l]->getBufferLength());   
-            
+
+            serial.writeByte((unsigned char)floor(lights[l]->getStrength() * 127));
+
             buffer += ofToString((int)(lights[l]->getStrength() * 127));
+
             if(l!=lights.size()-1) buffer += ",";
+
+            serial.writeByte(',');
         }
         buffer += "\n";
-        serial.writeBytes((unsigned char*) buffer.c_str(),buffer.size());
+        serial.writeByte('\n');
+//        serial.writeBytes((unsigned char*) buffer.c_str(),buffer.size());
         ofLog() << buffer;
     }
 }
 
 void testApp::exit() {
+    serial.writeByte('e');
     kinect.close();
     kinect.clear();
 }
@@ -145,6 +151,7 @@ void testApp::setupCamera() {
     kDepthMat.create(480, 640, CV_8UC1);
     //threshMat.create(480, 640, CV_32F);
     imitate(threshMat, kDepthMat);
+    imitate(avgMat, kDepthMat);
     //    imitate(kDepth, kDepthMat);
     //    imitate(thresh, threshMat);
     
@@ -158,15 +165,19 @@ void testApp::setupCamera() {
     contourFinder.getTracker().setPersistence(15);
     // an object can move up to 32 pixels per frame
     contourFinder.getTracker().setMaximumDistance(32);
+    avgCounter = 0;
 }
 
 void testApp::updateCamera() {
     contourFinder.setMinAreaRadius(panel.getValueI("minAreaRadius"));
     contourFinder.setMaxAreaRadius(panel.getValueI("maxAreaRadius"));
-    contourFinder.setThreshold(panel.getValueI("maxThreshold"));
+//    contourFinder.setThreshold(panel.getValueI("maxThreshold"));
     contourFinder.setAutoThreshold(true);
+    contourFinder.setInvert(true);
+    
     background.setLearningTime(panel.getValueI("learningTime"));
     background.setThresholdValue(panel.getValueI("backgroundThresh"));
+    
     if(panel.hasValueChanged("angle")) {
         angle = panel.getValueI("angle");
         kinect.setCameraTiltAngle(angle);
@@ -183,39 +194,55 @@ void testApp::updateCamera() {
     } else {
         kinect.update();
        if(kinect.isFrameNew()) {
-           cameras[0]->isNewFrame(true);   
-           kDepthMat = toCv(kinect.getDepthPixelsRef());
-           blur(kDepthMat, panel.getValueI("cvBlur"));
-           // threshMat = ( (kDepthMat * .3) + (threshMat))/2 ; // Attempt at an adapting threshold...
-           cv::absdiff(kDepthMat, threshMat, kDepthMat);
-           fillHoles(kDepthMat);
-           contourFinder.findContours(kDepthMat);
-           toOf(kDepthMat,kDepth);
-           kDepth.update();
-          // brush = getContour(&contourFinder);
-             float distance;
-           for(int j=0;j<lights.size();j++) {
-               distance = 0;
-               for( int i=0;i<contourFinder.size();i++) {
-                   ofPoint center = toOf(contourFinder.getCenter(i));
-                   distance += lights[j]->getLocation().squareDistance(ofVec3f(center.x,30,center.y)) * .001;
+           if(avgCounter == 0) {
+               kDepthMat = toCv(kinect.getDepthPixelsRef());
+               blur(kDepthMat, panel.getValueI("cvBlur"));
+               avgMat = kDepthMat;
+               avgCounter++;
+           } else
+           if(avgCounter < 2) { // If averaging the frames
+               kDepthMat = toCv(kinect.getDepthPixelsRef());
+               blur(kDepthMat, panel.getValueI("cvBlur"));
+               avgMat += kDepthMat/3;
+               avgCounter++;
+               
+           } else { // Act on the average
+               cameras[0]->isNewFrame(true);   
+               kDepthMat = toCv(kinect.getDepthPixelsRef());
+               blur(kDepthMat, panel.getValueI("cvBlur"));
+               avgMat += kDepthMat/3;
+               // threshMat = ( (kDepthMat * .3) + (threshMat))/2 ; // Attempt at an adapting threshold...
+               cv::absdiff(avgMat, threshMat, avgMat);
+               fillHoles(avgMat);
+               contourFinder.findContours(avgMat);
+               toOf(avgMat,kDepth);
+               kDepth.update();
+              // brush = getContour(&contourFinder);
+                 float distance;
+               for(int j=0;j<lights.size();j++) {
+                   distance = 0;
+                   for( int i=0;i<contourFinder.size();i++) {
+                       ofPoint center = toOf(contourFinder.getCenter(i));
+                       distance += lights[j]->getLocation().squareDistance(ofVec3f(center.x,30,center.y)) * .001;
+                   }
+                   lights[j]->setTotalDist(distance);
                }
-               lights[j]->setTotalDist(distance);
-           }
-           
-           // This is the weird bit that chooses which light is active
-           int pwrLight = 0;
-           for(int i=0;i<lights.size();i++) {
-               lights[i]->isActive(false);
-               if(lights[i]->getTotalDist() < lights[pwrLight]->getTotalDist()) { 
-                   pwrLight = i; 
+               
+               // This is the weird bit that chooses which light is active
+               int pwrLight = 0;
+               for(int i=0;i<lights.size();i++) {
+                   lights[i]->isActive(false);
+                   if(lights[i]->getTotalDist() < lights[pwrLight]->getTotalDist()) { 
+                       pwrLight = i; 
+                   }
                }
-           }
-           lights[pwrLight]->isActive(true); 
+               lights[pwrLight]->isActive(true); 
+               avgCounter = 0;
+          }
        } else {
            cameras[0]->isNewFrame(false);
        }
-        
+       
      
     }
 }

@@ -164,6 +164,8 @@ public:
     ofImage kDepth;
     cv::Mat kDepthMat;
     cv::Mat threshMat;
+    cv::Mat avgMat;
+    int avgCounter;
     ofxCv::RunningBackground background;
     ofxCv::ContourFinder contourFinder;
     
