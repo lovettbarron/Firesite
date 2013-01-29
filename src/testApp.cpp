@@ -79,7 +79,7 @@ void testApp::writeArduino() {
             serial.writeByte(',');
         }
         buffer += "\n";
-        serial.writeByte('\n');
+        serial.writeByte('a');
 //        serial.writeBytes((unsigned char*) buffer.c_str(),buffer.size());
         ofLog() << buffer;
     }
@@ -170,10 +170,10 @@ void testApp::setupCamera() {
 
 void testApp::updateCamera() {
     contourFinder.setMinAreaRadius(panel.getValueI("minAreaRadius"));
-    contourFinder.setMaxAreaRadius(panel.getValueI("maxAreaRadius"));
-//    contourFinder.setThreshold(panel.getValueI("maxThreshold"));
+    contourFinder.setMaxAreaRadius(panel.getValueI("maxAreaRadius"));   
+    contourFinder.setThreshold(panel.getValueI("maxThreshold"));
     contourFinder.setAutoThreshold(true);
-    contourFinder.setInvert(true);
+    //contourFinder.setInvert(true);
     
     background.setLearningTime(panel.getValueI("learningTime"));
     background.setThresholdValue(panel.getValueI("backgroundThresh"));
@@ -218,12 +218,20 @@ void testApp::updateCamera() {
                toOf(avgMat,kDepth);
                kDepth.update();
               // brush = getContour(&contourFinder);
-                 float distance;
+//               float distance;
                for(int j=0;j<lights.size();j++) {
-                   distance = 0;
+                   float distance = 0;
                    for( int i=0;i<contourFinder.size();i++) {
                        ofPoint center = toOf(contourFinder.getCenter(i));
-                       distance += lights[j]->getLocation().squareDistance(ofVec3f(center.x,30,center.y)) * .001;
+                       float depth, multi;
+                       if(kinect.isConnected()) {
+                           depth = kinect.getDistanceAt(center)*depthMulti;
+                           multi = 1 * pow((float)depth,1.1f);
+                       } else {
+                           multi = 1 * pow((float)center.y,1.1f);
+                       }
+                       
+                       distance += lights[j]->getLocation().squareDistance(ofVec3f(multi, 30, center.x)) * .001;
                    }
                    lights[j]->setTotalDist(distance);
                }
@@ -232,12 +240,12 @@ void testApp::updateCamera() {
                int pwrLight = 0;
                for(int i=0;i<lights.size();i++) {
                    lights[i]->isActive(false);
-                   if(lights[i]->getTotalDist() < lights[pwrLight]->getTotalDist()) { 
+                   if(lights[i]->getTotalDist() <= lights[pwrLight]->getTotalDist()) { 
                        pwrLight = i; 
                    }
                }
                lights[pwrLight]->isActive(true); 
-               avgCounter = 0;
+               avgCounter = 0; // This resets the frame averaging.
           }
        } else {
            cameras[0]->isNewFrame(false);
@@ -282,8 +290,6 @@ void testApp::update(){
 	box2d.update();	
     updateCamera();
     depthMulti = panel.getValueF("DepthMultiplier");
-	ofVec2f mouse(ofGetMouseX(), 5);
-	float minDis = ofGetMousePressed() ? 300 : 200;
     
     camera.setTarget(ofVec3f(room.x/2,room.y/2,room.z/2));
     camera.setPosition(room.x, room.y, room.z);
